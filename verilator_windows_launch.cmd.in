@@ -1,0 +1,5 @@
+@echo off
+set PATH=D:\MinGW\msys\1.0\local\bin;D:\MinGW\msys\1.0\bin;D:\MinGW\bin;%PATH%
+set VERILATOR_ROOT=/usr/local
+echo verilator %*
+perl /usr/local/bin/verilator %*

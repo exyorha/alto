@@ -1,0 +1,39 @@
+macro(generate_picoblaze_firmware project_name)
+
+    add_custom_target(${project_name}_mem ALL DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.mem
+    )
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${project_name}.rmh
+        COMMAND
+            ${Java_JAVA_EXECUTABLE}
+            -Dkcpsm=3
+            -Dbram=18
+            -Dmodule=dummy
+            -jar ${PROJECT_SOURCE_DIR}/3rdparty/KCAsm.jar
+            ${CMAKE_CURRENT_SOURCE_DIR}/${project_name}.psm
+            ${CMAKE_CURRENT_BINARY_DIR}/${project_name}.rmh
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${project_name}.psm
+        VERBATIM
+    )
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.mem
+        COMMAND picoblaze_generator ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${project_name}
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${project_name}.rmh
+                $<TARGET_FILE:picoblaze_generator>
+        VERBATIM
+    )
+
+    add_library(${project_name} STATIC EXCLUDE_FROM_ALL
+        ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${project_name}_rom.h
+    )
+
+    target_include_directories(${project_name} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+
+endmacro()

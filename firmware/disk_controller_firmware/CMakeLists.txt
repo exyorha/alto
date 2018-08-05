@@ -1,0 +1,1 @@
+generate_picoblaze_firmware(disk_controller_firmware)

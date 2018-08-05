@@ -1,0 +1,205 @@
+; $40 if card is SDHC, $00 otherwise
+CONSTANT RAM_SDHC_CARD, $00
+
+CONSTANT PORT_SPI_DATA,             $00
+
+CONSTANT PORT_SPI_STATUS,           $01
+CONSTANT PORT_SPI_STATUS_BUSY,      $01
+CONSTANT PORT_SPI_STATUS_SELECT,    $02
+
+CONSTANT CMD_GO_IDLE_STATE,         $40 ; CMD0
+CONSTANT CMD_SEND_IF_COND,          $48 ; CMD8
+CONSTANT ACMD_SEND_OP_COND,         $69 ; CMD41
+CONSTANT CMD_APP_CMD,               $77 ; CMD55
+CONSTANT CMD_READ_OCR,              $7a ; CMD58
+
+CONSTANT SD_STATUS_SUCCESS,               $00
+CONSTANT SD_STATUS_IN_IDLE_STATE,         $01
+CONSTANT SD_STATUS_ERASE_RESET,           $02
+CONSTANT SD_STATUS_ILLEGAL_COMMAND_ERROR, $04
+CONSTANT SD_STATUS_COMMAND_CRC_ERROR,     $08
+CONSTANT SD_STATUS_ERASE_SEQUENCE_ERROR,  $10
+CONSTANT SD_STATUS_ADDRESS_ERROR,         $20
+CONSTANT SD_STATUS_PARAMETER_ERROR,       $40
+CONSTANT SD_STATUS_ERROR_FLAGS,           $7F
+CONSTANT SD_STATUS_ERROR_CONDITIONS,      $FF
+CONSTANT SD_STATUS_INIT_ERROR_CONDITIONS, $FE
+CONSTANT SD_STATUS_RESPONSE_TIMEOUT,      $FF
+
+start:
+; SPI is deselected on reset
+
+; Begin SD initialization sequence:
+; 1. Apply 80 clocks on SCK with SS = high
+    LOAD    s1, &10
+applyStartupClock:
+    LOAD    s0, $FF
+    CALL    spiExchange
+    SUB     s1, &1
+    JUMP    NZ, applyStartupClock
+
+; 2. Send GO_IDLE_STATE with correct CRC
+    LOAD    s1, CMD_GO_IDLE_STATE
+    LOAD    s2, $00
+    LOAD    s3, $00
+    LOAD    s4, $00
+	LOAD	s5, $00
+    LOAD    s6, $95
+    CALL    sdCommand
+    AND     s1, SD_STATUS_INIT_ERROR_CONDITIONS
+    JUMP    NZ, start
+
+; Do not try SDHC init unless SEND_IF_COND passes
+    LOAD    s7, $00
+
+; 3. Send SEND_IF_COND with correct CRC for 3.3V
+    LOAD    s1, CMD_SEND_IF_COND
+    LOAD    s2, $00
+    LOAD    s3, $00
+    LOAD    s4, $01
+    LOAD    s5, $AA
+	LOAD	s6, $87
+    CALL    sdCommand
+    TEST    s1, SD_STATUS_INIT_ERROR_CONDITIONS
+    JUMP    NZ, beginOpCond
+
+    COMPARE s5, $AA
+    JUMP    NZ, beginOpCond
+	
+    COMPARE s4, $01
+    JUMP    NZ, start
+
+    ; Maybe SDHC, try SDHC
+    LOAD    s7, $40
+
+beginOpCond:
+; 4. Send ACMD_SEND_OP_COND
+    LOAD    s1, CMD_APP_CMD
+    LOAD    s2, $00
+    LOAD    s3, $00
+    LOAD    s4, $00
+    LOAD    s5, $00
+    CALL    sdCommand
+    TEST    s1, SD_STATUS_INIT_ERROR_CONDITIONS
+    JUMP    NZ, start
+    LOAD    s1, ACMD_SEND_OP_COND
+    LOAD    s2, s7
+    LOAD    s3, $00
+    LOAD    s4, $00
+    LOAD    s5, $00
+    CALL    sdCommand
+    TEST    s1, SD_STATUS_INIT_ERROR_CONDITIONS
+    JUMP    NZ, start
+    TEST    s1, SD_STATUS_IN_IDLE_STATE
+    JUMP    NZ, beginOpCond
+
+; 5. Read OCR
+    LOAD    s1, CMD_READ_OCR
+    LOAD    s2, $00
+    LOAD    s3, $00
+    LOAD    s4, $00
+    LOAD    s5, $00
+    CALL    sdCommand
+    TEST    s0, SD_STATUS_ERROR_CONDITIONS
+    JUMP    NZ, start
+
+    STORE   s2, RAM_SDHC_CARD
+
+mainLoop:
+    JUMP    mainLoop
+
+;
+; Execute SD command
+;
+; On entry:
+;  s1          - command code
+;  s2:s3:s4:s5 - command argument
+;  s6          - command CRC
+; On return:
+;  s0 - destroyed
+;  s1 - command status ($FF on timeout)
+;  s2:s3:s4:s5 - command response data
+
+sdCommand:
+    CALL    spiSelect
+    LOAD    s0, s1
+    CALL    spiExchange
+    LOAD    s0, s2
+    CALL    spiExchange
+    LOAD    s0, s3
+    CALL    spiExchange
+    LOAD    s0, s4
+    CALL    spiExchange
+    LOAD    s0, s5
+    CALL    spiExchange  
+    LOAD    s0, s6
+    CALL    spiExchange  
+
+    LOAD    s1, &8
+sdCommandWaitResponse:
+    CALL    spiRead
+    TEST    s0, $80
+    JUMP    Z, sdCommandResponseReceived
+    SUB     s1, &1
+    JUMP    NZ, sdCommandWaitResponse
+
+    LOAD    s1, $FF
+    JUMP    spiDeselect
+
+sdCommandResponseReceived:
+    LOAD    s1, s0
+    CALL    spiRead
+    LOAD    s2, s0
+    CALL    spiRead
+    LOAD    s3, s0
+    CALL    spiRead
+    LOAD    s4, s0
+    CALL    spiRead
+    LOAD    s5, s0
+
+sdCommandWaitIdle:
+    CALL    spiRead
+    COMPARE s0, $0
+    JUMP    Z, sdCommandWaitIdle
+
+    JUMP    spiDeselect
+
+;
+; Read a byte from SPI
+; Output:
+;  s0 - value read 
+;
+spiRead:
+    LOAD    s0, $FF
+;
+; Transfer a byte via SPI
+; Input:
+;  s0 - value to write
+; Output:
+;  s0 - value read 
+;
+spiExchange:
+    OUTPUT  s0, PORT_SPI_DATA
+spiExchangeWaitReady:
+    INPUT   s0, PORT_SPI_STATUS
+    TEST    s0, PORT_SPI_STATUS_BUSY
+    JUMP    NZ, spiExchangeWaitReady
+    INPUT   s0, PORT_SPI_DATA
+    RETURN
+
+;
+; Assert #CS on SPI
+; Destroys s0
+;
+spiSelect:
+    LOAD    s0, PORT_SPI_STATUS_SELECT
+    OUTPUT  s0, PORT_SPI_STATUS
+    RETURN
+;
+; Deassert #CS on SPI
+; Destroys s0
+;
+spiDeselect:
+    LOAD    s0, $0
+    OUTPUT  s0, PORT_SPI_STATUS
+    RETURN
