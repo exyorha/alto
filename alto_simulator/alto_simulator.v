@@ -17,4 +17,44 @@ module alto_simulator (
         .sd_ss_n_o(sd_ss_n_o)
     );
 
+    wire [16:1] wb_adr;
+    wire        wb_stb;
+    wire        wb_cyc;
+    wire        wb_we;
+    wire  [1:0] wb_sel;
+    wire [15:0] wb_dat_o;
+    wire [15:0] wb_dat_i;
+    wire        wb_ack;
+
+    alto_system sys (
+        .clk_i(clk_i),
+        .rst_i(rst_i),
+
+        .wb_adr_o(wb_adr),
+        .wb_stb_o(wb_stb),
+        .wb_cyc_o(wb_cyc),
+        .wb_we_o(wb_we),
+        .wb_sel_o(wb_sel),
+        .wb_dat_o(wb_dat_o),
+        .wb_dat_i(wb_dat_i),
+        .wb_ack_i(wb_ack)
+    );
+
+    bus_rom #(
+        .DEPTH(16),
+        .READONLY(0)
+    ) ram (
+        .clk_i(clk_i),
+        .rst_i(rst_i),
+        .adr_i(wb_adr),
+        .sel_i(wb_sel),
+        .stb_i(wb_stb),
+        .cyc_i(wb_cyc),
+        .we_i(wb_we),
+        .dat_i(wb_dat_o),
+        .dat_o(wb_dat_i),
+        .ack_o(wb_ack),
+        .err_o()
+    );
+    
 endmodule
