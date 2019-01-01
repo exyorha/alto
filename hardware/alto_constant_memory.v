@@ -14,5 +14,5 @@ module alto_constant_memory (
 	initial
 		for(i = 0; i < 256; i = i + 1)
 			constant_memory[i[7:0]] = i[15:0];
-			
+
 endmodule

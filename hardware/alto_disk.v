@@ -17,10 +17,11 @@ module alto_disk (
 );
 
 	reg [13:0] sector_counter;
-	reg [0:0] state;
+	reg [1:0] state;
 
-	`define ALTO_DISK_STATE_IDLE	1'b0
-	`define ALTO_DISK_STATE_SEEK	1'b1
+	`define ALTO_DISK_STATE_IDLE		2'b00
+	`define ALTO_DISK_STATE_SEEK		2'b01
+	`define ALTO_DISK_STATE_TRANSFER	2'b10
 	
 	wire disk_task = current_task_i == `ALTO_TASK_DISK_SECTOR;
 	
@@ -174,6 +175,8 @@ module alto_disk (
 					end
 				end
 			
+				if(!wdinhib)
+					state <= `ALTO_DISK_STATE_TRANSFER;
 			end
 			default:;
 			endcase
@@ -212,7 +215,7 @@ module alto_disk (
 			`ALTO_DISK_F2_RECNO:   modifiers_o = init_modifier | recno_modifier;
 			`ALTO_DISK_F2_XFRDAT:  modifiers_o = init_modifier | { 9'b0, data_xfer };
 			`ALTO_DISK_F2_SWRNRDY: modifiers_o = init_modifier | { 9'b0, (seek | not_rdy) };
-			`ALTO_DISK_F2_NFER:    modifiers_o = init_modifier | { 9'b0, (not_rdy | data_late | seek_fail) };
+			`ALTO_DISK_F2_NFER:    modifiers_o = init_modifier | { 9'b0, !(not_rdy | data_late | seek_fail) };
 			`ALTO_DISK_F2_STROBON: modifiers_o = init_modifier | { 9'b0, seek };
 			default:               modifiers_o = 10'b0;
 			endcase

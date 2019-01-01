@@ -17,7 +17,7 @@ module alto_alu (
 		`ALTO_ALUF_BUS_AND_T:           { carry_o, output_o } = { 1'b0, bus_i & t_i };
 		`ALTO_ALUF_BUS_XOR_T:           { carry_o, output_o } = { 1'b0, bus_i ^ t_i };
 		`ALTO_ALUF_BUS_PLUS_1:          { carry_o, output_o } = bus_i + 16'b0 + 1'b1;
-		`ALTO_ALUF_BUS_MINUS_1:         { carry_o, output_o } = bus_i + ~17'hFFFF + 1'b1;
+		`ALTO_ALUF_BUS_MINUS_1:         { carry_o, output_o } = bus_i + { 1'b0, ~16'b1 } + 1'b1;
 		`ALTO_ALUF_BUS_PLUS_T:          { carry_o, output_o } = bus_i + t_i;
 		`ALTO_ALUF_BUS_MINUS_T:         { carry_o, output_o } = bus_i + ~{ 1'b0, t_i } + 1'b1;
 		`ALTO_ALUF_BUS_MINUS_T_MINUS_1: { carry_o, output_o } = bus_i + ~{ 1'b0, t_i };
